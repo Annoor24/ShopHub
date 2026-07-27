@@ -13,30 +13,48 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Helper for store access
+    function hasAccess(storeId) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.allowedStoreIds.hasAny([storeId]);
+    }
+
     // Role-based Users Collection
     match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.role == 'staff';
-      allow update: if isAuthenticated() && (isAdmin() || (request.auth.uid == userId && request.resource.data.role == resource.data.role));
+      allow read: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      allow create: if request.auth != null; // Allow initial signup
+      allow update: if (request.auth != null && request.auth.uid == userId && 
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))) || 
+                       (isAdmin() && request.auth.uid != userId);
       allow delete: if isAdmin();
+    }
+
+    // Stores
+    match /stores/{storeId} {
+      allow read: if isAdmin() || hasAccess(storeId) || (isAuthenticated() && resource.data.ownerId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.ownerId == request.auth.uid);
     }
 
     // Products
     match /products/{productId} {
-      allow read: if isAuthenticated();
-      allow create, delete: if isAdmin();
-      allow update: if isAuthenticated(); // Needed for and stock/price updates during sales
+      allow read: if isAdmin() || hasAccess(resource.data.storeId);
+      allow create: if isAdmin() || hasAccess(request.resource.data.storeId);
+      allow update, delete: if isAdmin() || hasAccess(resource.data.storeId);
     }
 
     // Stock Movements
     match /stockMovements/{movementId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAdmin() || hasAccess(resource.data.storeId);
+      allow create: if isAdmin() || hasAccess(request.resource.data.storeId);
+      allow update, delete: if isAdmin() || hasAccess(resource.data.storeId);
     }
 
     // Orders
     match /orders/{orderId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isAuthenticated();
+      allow read: if isAdmin() || hasAccess(resource.data.storeId);
+      allow create: if isAdmin() || hasAccess(request.resource.data.storeId);
+      allow update, delete: if isAdmin() || hasAccess(resource.data.storeId);
     }
   }
 }

@@ -2,9 +2,11 @@ import React, { useState, useRef } from 'react';
 import { db } from '../services/firebase';
 import { collection, writeBatch, doc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import Papa from 'papaparse';
+import { useStore } from '../context/StoreContext';
 import { Upload, X, CheckCircle, AlertCircle, Loader2, FileText, Download } from 'lucide-react';
 
 export default function BulkUpload({ onComplete }) {
+  const { currentStore } = useStore();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ total: 0, current: 0 });
@@ -40,7 +42,10 @@ export default function BulkUpload({ onComplete }) {
   };
 
   const processUpload = () => {
-    if (!file) return;
+    if (!file || !currentStore) {
+      if (!currentStore) setError("Please select a branch first.");
+      return;
+    }
     setLoading(true);
     setResults(null);
 
@@ -67,6 +72,7 @@ export default function BulkUpload({ onComplete }) {
 
             const newDocRef = doc(collection(db, 'products'));
             batch.set(newDocRef, {
+              storeId: currentStore.id,
               name: row.name,
               sku: row.sku,
               category: row.category || 'General',
@@ -114,7 +120,7 @@ export default function BulkUpload({ onComplete }) {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="text-center">
-        <h3 className="text-2xl font-bold text-white mb-2">Bulk Product Upload</h3>
+        <h3 className="text-2xl font-medium text-slate-900 mb-2">Bulk Product Upload</h3>
         <p className="text-slate-400 max-w-md mx-auto">
           Upload a CSV file containing your product list. Make sure to use our template for the best results.
         </p>
@@ -125,28 +131,28 @@ export default function BulkUpload({ onComplete }) {
           <div 
             onClick={() => !loading && fileInputRef.current.click()}
             className={`border-2 border-dashed rounded-3xl p-12 flex flex-col items-center justify-center transition-all cursor-pointer ${
-              file ? 'border-blue-500/50 bg-blue-600/5' : 'border-slate-700 hover:border-blue-500/50 hover:bg-slate-800/30'
+              file ? 'border-slate-800/50 bg-slate-900/5' : 'border-slate-300 hover:border-slate-800/50 hover:bg-white'
             } ${loading ? 'opacity-50 cursor-wait' : ''}`}
           >
             {file ? (
               <div className="flex flex-col items-center animate-in zoom-in-95 duration-200">
-                <div className="p-4 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-900/20">
-                  <FileText size={32} className="text-white" />
+                <div className="p-4 bg-slate-900 rounded-2xl mb-4 shadow-lg shadow-slate-900/20">
+                  <FileText size={32} className="text-slate-900" />
                 </div>
-                <p className="text-white font-bold text-lg">{file.name}</p>
-                <p className="text-slate-500 text-sm mt-1">{(file.size / 1024).toFixed(1)} KB</p>
+                <p className="text-slate-900 font-medium text-lg">{file.name}</p>
+                <p className="text-slate-400 text-sm mt-1">{(file.size / 1024).toFixed(1)} KB</p>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                  className="mt-4 text-red-400 hover:text-red-300 text-sm font-bold underline"
+                  className="mt-4 text-red-400 hover:text-red-300 text-sm font-medium underline"
                 >
                   Remove File
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col items-center text-slate-500">
+              <div className="flex flex-col items-center text-slate-400">
                 <Upload size={48} strokeWidth={1.5} className="mb-4" />
-                <p className="font-bold text-lg">Click to select CSV</p>
-                <p className="text-sm mt-1 uppercase tracking-widest font-black opacity-40">or drag and drop</p>
+                <p className="font-medium text-lg">Click to select CSV</p>
+                <p className="text-sm mt-1 uppercase tracking-widest font-bold opacity-40">or drag and drop</p>
               </div>
             )}
             <input 
@@ -169,7 +175,7 @@ export default function BulkUpload({ onComplete }) {
           <div className="flex flex-col sm:flex-row gap-4">
             <button
               onClick={downloadSample}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl border border-slate-700 font-bold transition-all"
+              className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-white hover:bg-slate-100 text-slate-700 rounded-2xl border border-slate-300 font-medium transition-all"
             >
               <Download size={20} />
               Download Template
@@ -177,7 +183,7 @@ export default function BulkUpload({ onComplete }) {
             <button
               onClick={processUpload}
               disabled={!file || loading}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-2xl font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95"
+              className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-slate-900 hover:bg-slate-800 disabled:bg-white disabled:text-slate-600 text-white rounded-2xl font-medium shadow-xl shadow-slate-900/20 transition-all active:scale-95"
             >
               {loading ? (
                 <>
@@ -194,18 +200,18 @@ export default function BulkUpload({ onComplete }) {
           </div>
         </div>
       ) : (
-        <div className="text-center bg-slate-800/20 border border-slate-700/50 p-10 rounded-3xl animate-in zoom-in-95 duration-500">
+        <div className="text-center bg-white border border-slate-300 p-10 rounded-3xl animate-in zoom-in-95 duration-500">
           <div className="inline-flex p-4 bg-emerald-500/10 rounded-full mb-6">
             <CheckCircle size={48} className="text-emerald-500" />
           </div>
-          <h4 className="text-2xl font-bold text-white mb-2">Upload Complete!</h4>
+          <h4 className="text-2xl font-medium text-slate-900 mb-2">Upload Complete!</h4>
           <p className="text-slate-400 mb-8">
-            Successfully imported <span className="text-emerald-400 font-bold">{results.success}</span> products.
+            Successfully imported <span className="text-emerald-400 font-medium">{results.success}</span> products.
             {results.skipped > 0 && ` ${results.skipped} rows were skipped due to missing data.`}
           </p>
           <button
             onClick={() => { setResults(null); setFile(null); onComplete(); }}
-            className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-2xl transition-all"
+            className="px-8 py-4 bg-white hover:bg-slate-100 text-slate-900 font-medium rounded-2xl transition-all"
           >
             Back to Catalog
           </button>
