@@ -1,4 +1,7 @@
 {
+  "firestore": {
+    "rules": "backend/firestore.rules"
+  },
   "hosting": {
     "site": "sbako-shophub",
     "public": "frontend/dist",

@@ -1,15 +1,22 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
+import React, { createContext, useContext, useEffect, useState } from "react";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
   sendEmailVerification,
   updatePassword,
-  updateProfile
-} from 'firebase/auth';
-import { auth, db } from '../services/firebase';
-import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+  updateProfile,
+} from "firebase/auth";
+import { auth, db } from "../services/firebase";
+import {
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const AuthContext = createContext();
 
@@ -24,6 +31,10 @@ export function AuthProvider({ children }) {
 
   function login(email, password) {
     return signInWithEmailAndPassword(auth, email, password);
+  }
+
+  function signup(email, password) {
+    return createUserWithEmailAndPassword(auth, email, password);
   }
 
   function logout() {
@@ -55,11 +66,19 @@ export function AuthProvider({ children }) {
 
   async function updateUserData(data) {
     if (auth.currentUser) {
-      // Update Firestore
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        ...data,
-        updatedAt: serverTimestamp()
-      });
+      // Use setDoc with merge: true instead of updateDoc
+      // This ensures we can save data even if the background listener hasn't created the doc yet
+      // Filter out role from data to prevent accidental overrides
+      const { role, ...safeData } = data;
+      
+      await setDoc(
+        doc(db, "users", auth.currentUser.uid),
+        {
+          ...safeData,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
       // Update Firebase Auth profile (name)
       if (data.name) {
         await updateProfile(auth.currentUser, { displayName: data.name });
@@ -73,23 +92,17 @@ export function AuthProvider({ children }) {
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      
+
       if (user) {
-        unsubscribeProfile = onSnapshot(doc(db, 'users', user.uid), async (docSnap) => {
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data());
-          } else {
-            // Create default profile if not exists
-            const defaultProfile = {
-              email: user.email,
-              role: 'staff', // Default to staff
-              createdAt: serverTimestamp()
-            };
-            await setDoc(doc(db, 'users', user.uid), defaultProfile);
-            setUserProfile(defaultProfile);
-          }
-          setLoading(false);
-        });
+        unsubscribeProfile = onSnapshot(
+          doc(db, "users", user.uid),
+          async (docSnap) => {
+            if (docSnap.exists()) {
+              setUserProfile(docSnap.data());
+            }
+            setLoading(false);
+          },
+        );
       } else {
         setUserProfile(null);
         if (unsubscribeProfile) unsubscribeProfile();
@@ -106,15 +119,22 @@ export function AuthProvider({ children }) {
   const value = {
     currentUser,
     userProfile,
-    isAdmin: userProfile?.role?.toLowerCase() === 'admin',
+    isAdmin: userProfile?.role?.toLowerCase() === "admin",
     login,
+    signup,
     logout,
     resetPassword,
     sendVerification,
     refreshUser,
     changePassword,
-    updateUserData
+    updateUserData,
   };
+
+  console.log("AuthContext Status:", {
+    loading,
+    hasUser: !!currentUser,
+    hasProfile: !!userProfile,
+  });
 
   return (
     <AuthContext.Provider value={value}>
